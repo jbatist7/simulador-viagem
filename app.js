@@ -1,14 +1,54 @@
-const state = { routes: [], nextRouteId: 1, map: null, markers: {}, polylines: {}, routeToDelete: null };
-const CONFIG = { defaultCenter: [-51.9253, -14.2350], defaultZoom: 4, minSpeed: 40, maxSpeed: 700, markerOffsetMeters: 300 };
+const state = { 
+    routes: [], 
+    nextRouteId: 1, 
+    map: null, 
+    markers: {}, 
+    polylines: {}, 
+    routeToDelete: null,
+    draggedMarker: null,
+    draggedWaypointIndex: null
+};
+const CONFIG = { 
+    defaultCenter: [-51.9253, -14.2350], 
+    defaultZoom: 5, 
+    minSpeed: 40, 
+    maxSpeed: 700, 
+    markerOffsetMeters: 300 
+};
 
-document.addEventListener('DOMContentLoaded', () => { initMap(); setupEventListeners(); startSimulationLoop(); });
+document.addEventListener('DOMContentLoaded', () => { 
+    initMap(); 
+    setupEventListeners(); 
+    setupSearchBox();
+    startSimulationLoop(); 
+});
 
 function initMap() {
     state.map = new maplibregl.Map({
-        container: 'map', style: 'https://demotiles.maplibre.org/style.json',
-        center: CONFIG.defaultCenter, zoom: CONFIG.defaultZoom, attributionControl: false
+        container: 'map', 
+        style: 'https://demotiles.maplibre.org/style.json',
+        center: CONFIG.defaultCenter, 
+        zoom: CONFIG.defaultZoom, 
+        attributionControl: false,
+        scrollZoom: true,
+        dragPan: true,
+        boxZoom: true,
+        doubleClickZoom: true,
+        touchZoomRotate: true,
+        cooperativeGestures: false
     });
-    state.map.addControl(new maplibregl.AttributionControl({ compact: true, customAttribution: '© OpenStreetMap contributors' }), 'bottom-left');
+    
+    state.map.addControl(new maplibregl.AttributionControl({ 
+        compact: true, 
+        customAttribution: '© OpenStreetMap contributors' 
+    }), 'bottom-left');
+    
+    state.map.addControl(new maplibregl.NavigationControl({ 
+        showCompass: true,
+        showZoom: true,
+        visualizePitch: false
+    }), 'top-right');
+    
     state.map.on('click', onMapClick);
 }
 
@@ -18,18 +58,135 @@ function setupEventListeners() {
     document.getElementById('btn-cancel-delete').addEventListener('click', cancelDelete);
 }
 
+// Busca de cidades (Nominatim API)
+function setupSearchBox() {
+    const searchInput = document.getElementById('city-search');
+    const resultsDiv = document.getElementById('search-results');
+    let searchTimeout;
+    
+    searchInput.addEventListener('input', (e) => {
+        clearTimeout(searchTimeout);
+        const query = e.target.value.trim();
+        
+        if (query.length < 3) {
+            resultsDiv.classList.add('hidden');
+            return;
+        }
+        
+        searchTimeout = setTimeout(() => {
+            searchCity(query);
+        }, 500);
+    });
+    
+    // Fechar resultados ao clicar fora
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.search-box')) {
+            resultsDiv.classList.add('hidden');
+        }
+    });
+}
+
+async function searchCity(query) {
+    const resultsDiv = document.getElementById('search-results');
+    try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1`);
+        const results = await response.json();
+        
+        if (results.length === 0) {
+            resultsDiv.classList.add('hidden');
+            return;
+        }
+        
+        resultsDiv.innerHTML = results.map(place => `
+            <div class="search-result-item" data-lat="${place.lat}" data-lon="${place.lon}" data-name="${place.display_name}">
+                📍 ${place.display_name.split(',')[0]}
+            </div>
+        `).join('');
+        
+        resultsDiv.classList.remove('hidden');
+        
+        // Adicionar eventos de clique
+        resultsDiv.querySelectorAll('.search-result-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const lat = parseFloat(item.dataset.lat);
+                const lon = parseFloat(item.dataset.lon);
+                const name = item.dataset.name;
+                
+                addWaypointFromSearch(lat, lon, name);
+                resultsDiv.classList.add('hidden');
+                document.getElementById('city-search').value = '';
+            });
+        });
+    } catch (error) {
+        console.error('Erro na busca:', error);
+        resultsDiv.classList.add('hidden');
+    }
+}
+
+function addWaypointFromSearch(lat, lon, name) {
+    if (state.routes.length === 0) createNewRoute();
+    const lastRoute = state.routes[state.routes.length - 1];
+    lastRoute.waypoints.push({ lat, lon, name });
+    addDraggableMarker(lastRoute.id, lastRoute.waypoints.length - 1, { lat, lon });
+    
+    if (lastRoute.waypoints.length >= 2) {
+        calculateRoute(lastRoute);
+    }
+    
+    // Centralizar mapa
+    state.map.flyTo({ center: [lon, lat], zoom: 12, duration: 1000 });
+    renderRoutesList();
+    showInfo(`Adicionado: ${name.split(',')[0]}`);
+}
+
 function createNewRoute() {
-    const route = { id: state.nextRouteId++, waypoints: [], polyline: [], totalMeters: 0, traveledMeters: 0, speedKmh: 80, isPlaying: false, cumulativeDistances: [] };
-    state.routes.push(route); renderRoutesList(); showInfo('Nova rota criada! Toque no mapa para adicionar pontos.');
+    const route = { 
+        id: state.nextRouteId++, 
+        waypoints: [], 
+        polyline: [], 
+        totalMeters: 0, 
+        traveledMeters: 0, 
+        speedKmh: 80, 
+        isPlaying: false, 
+        cumulativeDistances: [] 
+    };
+    state.routes.push(route); 
+    renderRoutesList(); 
+    showInfo('Nova rota! Busque cidades ou clique no mapa.');
 }
 
 function onMapClick(e) {
     if (state.routes.length === 0) createNewRoute();
     const lastRoute = state.routes[state.routes.length - 1];
     lastRoute.waypoints.push({ lat: e.lngLat.lat, lon: e.lngLat.lng });
-    addMarker(lastRoute.id, lastRoute.waypoints.length - 1, e.lngLat);
+    addDraggableMarker(lastRoute.id, lastRoute.waypoints.length - 1, e.lngLat);
     if (lastRoute.waypoints.length >= 2) calculateRoute(lastRoute);
     renderRoutesList();
+}
+
+function addDraggableMarker(routeId, pointIndex, lngLat) {
+    const el = document.createElement('div');
+    el.style.cssText = 'width:16px;height:16px;background:#1976D2;border:3px solid white;border-radius:50%;box-shadow:0 2px 4px rgba(0,0,0,0.3);cursor:move;';
+    el.title = 'Arraste para mover';
+    
+    const marker = new maplibregl.Marker({ element: el, draggable: true })
+        .setLngLat([lngLat.lon || lngLat.lng, lngLat.lat])
+        .addTo(state.map);
+    
+    // Evento de arraste
+    marker.on('drag', (e) => {
+        const route = state.routes.find(r => r.id == routeId);
+        if (route && route.waypoints[pointIndex]) {
+            route.waypoints[pointIndex].lat = e.target.getLngLat().lat;
+            route.waypoints[pointIndex].lon = e.target.getLngLat().lng;
+            if (route.waypoints.length >= 2) {
+                calculateRoute(route);
+            }
+        }
+    });
+    
+    if (!state.markers[routeId]) state.markers[routeId] = [];
+    state.markers[routeId].push(marker);
 }
 
 async function calculateRoute(route) {
@@ -46,10 +203,10 @@ async function calculateRoute(route) {
         route.traveledMeters = 0;
         route.cumulativeDistances = calculateCumulativeDistances(route.polyline);
         drawPolyline(route);
-        showInfo(`Rota calculada: ${(route.totalMeters / 1000).toFixed(1)} km`);
+        showInfo(`Rota: ${(route.totalMeters / 1000).toFixed(1)} km`);
     } catch (error) {
         console.error('Erro na rota:', error);
-        showInfo('Erro ao calcular rota. Usando linha reta.');
+        showInfo('Erro. Usando linha reta.');
         createDirectLine(route);
     }
     renderRoutesList();
@@ -63,20 +220,13 @@ function createDirectLine(route) {
 }
 
 function calculateCumulativeDistances(polyline) {
-    const cumulative = [0]; let sum = 0;
+    const cumulative = [0]; 
+    let sum = 0;
     for (let i = 1; i < polyline.length; i++) {
         sum += haversineDistance(polyline[i-1].lat, polyline[i-1].lon, polyline[i].lat, polyline[i].lon);
         cumulative.push(sum);
     }
     return cumulative;
-}
-
-function addMarker(routeId, pointIndex, lngLat) {
-    const el = document.createElement('div');
-    el.style.cssText = 'width:16px;height:16px;background:#1976D2;border:3px solid white;border-radius:50%;box-shadow:0 2px 4px rgba(0,0,0,0.3);';
-    const marker = new maplibregl.Marker({ element: el }).setLngLat(lngLat).addTo(state.map);
-    if (!state.markers[routeId]) state.markers[routeId] = [];
-    state.markers[routeId].push(marker);
 }
 
 function drawPolyline(route) {
@@ -86,8 +236,30 @@ function drawPolyline(route) {
         if (state.map.getSource(routeId)) state.map.removeSource(routeId);
     }
     const coordinates = route.polyline.map(p => [p.lon, p.lat]);
-    state.map.addSource(routeId, { type: 'geojson', data: { type: 'Feature', geometry: { type: 'LineString', coordinates } } });
-    state.map.addLayer({ id: routeId, type: 'line', source: routeId, layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#1976D2', 'line-width': 4, 'line-opacity': 0.8 } });
+    state.map.addSource(routeId, { 
+        type: 'geojson', 
+         { 
+            type: 'Feature', 
+            geometry: { 
+                type: 'LineString', 
+                coordinates: coordinates 
+            } 
+        } 
+    });
+    state.map.addLayer({ 
+        id: routeId, 
+        type: 'line', 
+        source: routeId, 
+        layout: { 
+            'line-join': 'round', 
+            'line-cap': 'round' 
+        }, 
+        paint: { 
+            'line-color': '#1976D2', 
+            'line-width': 4, 
+            'line-opacity': 0.8 
+        } 
+    });
     state.polylines[routeId] = true;
     if (coordinates.length > 0) {
         const bounds = coordinates.reduce((b, c) => b.extend(c), new maplibregl.LngLatBounds(coordinates[0], coordinates[0]));
@@ -116,7 +288,10 @@ function getPositionAtDistance(route) {
     if (route.traveledMeters >= route.totalMeters) return route.polyline[route.polyline.length - 1];
     let segmentIndex = 0;
     for (let i = 0; i < route.cumulativeDistances.length; i++) {
-        if (route.cumulativeDistances[i] >= route.traveledMeters) { segmentIndex = Math.max(1, i); break; }
+        if (route.cumulativeDistances[i] >= route.traveledMeters) { 
+            segmentIndex = Math.max(1, i); 
+            break; 
+        }
     }
     const segmentStart = route.cumulativeDistances[segmentIndex - 1];
     const segmentEnd = route.cumulativeDistances[segmentIndex];
@@ -146,7 +321,10 @@ function startSimulationLoop() {
 }
 
 function togglePlay(route) {
-    if (route.polyline.length === 0) { showInfo('Adicione pelo menos 2 pontos à rota'); return; }
+    if (route.polyline.length === 0) { 
+        showInfo('Adicione pelo menos 2 pontos'); 
+        return; 
+    }
     route.isPlaying = !route.isPlaying;
     renderRoutesList();
 }
@@ -162,13 +340,20 @@ function setSpeed(route, speed) {
     renderRoutesList();
 }
 
-function deleteRoute(routeId) { state.routeToDelete = routeId; document.getElementById('confirm-modal').classList.remove('hidden'); }
+function deleteRoute(routeId) { 
+    state.routeToDelete = routeId; 
+    document.getElementById('confirm-modal').classList.remove('hidden'); 
+}
 
 function confirmDelete() {
     if (state.routeToDelete !== null) {
-        if (state.markers[state.routeToDelete]) state.markers[state.routeToDelete].forEach(m => m.remove());
+        if (state.markers[state.routeToDelete]) {
+            state.markers[state.routeToDelete].forEach(m => m.remove());
+        }
         const simMarkerId = `simulator-${state.routeToDelete}`;
-        if (state.markers[simMarkerId]) state.markers[simMarkerId].remove();
+        if (state.markers[simMarkerId]) {
+            state.markers[simMarkerId].remove();
+        }
         const polylineId = `route-${state.routeToDelete}`;
         if (state.map.getLayer(polylineId)) state.map.removeLayer(polylineId);
         if (state.map.getSource(polylineId)) state.map.removeSource(polylineId);
@@ -180,32 +365,42 @@ function confirmDelete() {
     document.getElementById('confirm-modal').classList.add('hidden');
 }
 
-function cancelDelete() { state.routeToDelete = null; document.getElementById('confirm-modal').classList.add('hidden'); }
+function cancelDelete() { 
+    state.routeToDelete = null; 
+    document.getElementById('confirm-modal').classList.add('hidden'); 
+}
 
 function renderRoutesList() {
     const container = document.getElementById('routes-list');
     if (state.routes.length === 0) {
-        container.innerHTML = '<p style="text-align:center;color:#888;padding:20px;">Nenhuma rota criada. Toque no mapa para começar!</p>';
+        container.innerHTML = '<p style="text-align:center;color:#888;padding:15px;font-size:12px;">Nenhuma rota. Busque cidades ou clique no mapa!</p>';
         return;
     }
     container.innerHTML = state.routes.map(route => `
         <div class="route-card ${route.isPlaying ? 'active' : ''}" data-route-id="${route.id}">
             <div class="route-header">
-                <span class="route-title">🛣️ Rota #${route.id} (${route.waypoints.length} pontos)</span>
-                <div class="route-actions"><button class="btn-icon" onclick="deleteRoute(${route.id})">🗑️</button></div>
+                <span class="route-title">🛣️ Rota #${route.id} (${route.waypoints.length} pts)</span>
+                <div class="route-actions">
+                    <button class="btn-icon" onclick="deleteRoute(${route.id})">🗑️</button>
+                </div>
             </div>
             <div class="route-controls">
-                <button class="play-btn ${route.isPlaying ? 'paused' : ''}" onclick="togglePlay(${route.id})">${route.isPlaying ? '⏸️' : '▶️'}</button>
-                <input type="range" class="progress-slider" min="0" max="1" step="0.01" value="${route.totalMeters > 0 ? route.traveledMeters / route.totalMeters : 0}" oninput="seekRoute(${route.id}, this.value)">
+                <button class="play-btn ${route.isPlaying ? 'paused' : ''}" onclick="togglePlay(${route.id})">
+                    ${route.isPlaying ? '⏸️' : '▶️'}
+                </button>
+                <input type="range" class="progress-slider" min="0" max="1" step="0.01" 
+                    value="${route.totalMeters > 0 ? route.traveledMeters / route.totalMeters : 0}" 
+                    oninput="seekRoute(${route.id}, this.value)">
             </div>
             <div class="route-stats">
-                <span>📏 ${(route.totalMeters / 1000).toFixed(1)} km total</span>
-                <span>✅ ${(route.traveledMeters / 1000).toFixed(1)} km feito</span>
-                <span>⏳ ${(Math.max(0, route.totalMeters - route.traveledMeters) / 1000).toFixed(1)} km resta</span>
+                <span>📏 ${(route.totalMeters / 1000).toFixed(1)} km</span>
+                <span>✅ ${(route.traveledMeters / 1000).toFixed(1)} km</span>
+                <span>⏳ ${(Math.max(0, route.totalMeters - route.traveledMeters) / 1000).toFixed(1)} km</span>
             </div>
             <div class="speed-control">
                 <span>🚗 ${route.speedKmh} km/h</span>
-                <input type="range" class="speed-slider" min="${CONFIG.minSpeed}" max="${CONFIG.maxSpeed}" value="${route.speedKmh}" oninput="setSpeed(${route.id}, this.value)">
+                <input type="range" class="speed-slider" min="${CONFIG.minSpeed}" max="${CONFIG.maxSpeed}" 
+                    value="${route.speedKmh}" oninput="setSpeed(${route.id}, this.value)">
             </div>
         </div>
     `).join('');
@@ -218,15 +413,23 @@ function updateRouteCard(route) {
     const stats = card.querySelector('.route-stats');
     const speedDisplay = card.querySelector('.speed-control span');
     if (slider) slider.value = route.totalMeters > 0 ? route.traveledMeters / route.totalMeters : 0;
-    if (stats) stats.innerHTML = `<span>📏 ${(route.totalMeters / 1000).toFixed(1)} km total</span><span>✅ ${(route.traveledMeters / 1000).toFixed(1)} km feito</span><span>⏳ ${(Math.max(0, route.totalMeters - route.traveledMeters) / 1000).toFixed(1)} km resta</span>`;
+    if (stats) {
+        stats.innerHTML = `
+            <span>📏 ${(route.totalMeters / 1000).toFixed(1)} km</span>
+            <span>✅ ${(route.traveledMeters / 1000).toFixed(1)} km</span>
+            <span>⏳ ${(Math.max(0, route.totalMeters - route.traveledMeters) / 1000).toFixed(1)} km</span>
+        `;
+    }
     if (speedDisplay) speedDisplay.textContent = `🚗 ${route.speedKmh} km/h`;
 }
 
 function showInfo(message) {
-    const infoCard = document.querySelector('.info-card p:first-child');
+    const infoCard = document.querySelector('.hint');
     if (infoCard) {
         infoCard.textContent = `ℹ️ ${message}`;
-        setTimeout(() => { infoCard.textContent = '👆 Toque no mapa para criar rotas (origem → destino → paradas)'; }, 3000);
+        setTimeout(() => { 
+            infoCard.textContent = '👆 Toque no mapa ou busque cidades'; 
+        }, 3000);
     }
 }
 
@@ -234,9 +437,13 @@ function haversineDistance(lat1, lon1, lat2, lon2) {
     const R = 6371000;
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) + 
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+              Math.sin(dLon/2) * Math.sin(dLon/2);
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
-window.togglePlay = togglePlay; window.seekRoute = (id, v) => seekRoute(state.routes.find(r => r.id == id), parseFloat(v));
-window.setSpeed = (id, v) => setSpeed(state.routes.find(r => r.id == id), parseFloat(v)); window.deleteRoute = deleteRoute;
+window.togglePlay = togglePlay; 
+window.seekRoute = (id, v) => seekRoute(state.routes.find(r => r.id == id), parseFloat(v));
+window.setSpeed = (id, v) => setSpeed(state.routes.find(r => r.id == id), parseFloat(v)); 
+window.deleteRoute = deleteRoute;
