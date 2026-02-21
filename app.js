@@ -4,13 +4,11 @@ const state = {
     map: null, 
     markers: {}, 
     polylines: {}, 
-    routeToDelete: null,
-    draggedMarker: null,
-    draggedWaypointIndex: null
+    routeToDelete: null
 };
 const CONFIG = { 
-    defaultCenter: [-51.9253, -14.2350], 
-    defaultZoom: 5, 
+    defaultCenter: [-14.2350, -51.9253], 
+    defaultZoom: 6, 
     minSpeed: 40, 
     maxSpeed: 700, 
     markerOffsetMeters: 300 
@@ -24,30 +22,21 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function initMap() {
-    state.map = new maplibregl.Map({
-        container: 'map', 
-        style: 'https://demotiles.maplibre.org/style.json',
-        center: CONFIG.defaultCenter, 
-        zoom: CONFIG.defaultZoom, 
-        attributionControl: false,
-        scrollZoom: true,
-        dragPan: true,
-        boxZoom: true,
+    state.map = L.map('map', {
+        center: CONFIG.defaultCenter,
+        zoom: CONFIG.defaultZoom,
+        zoomControl: true,
+        scrollWheelZoom: true,
         doubleClickZoom: true,
-        touchZoomRotate: true,
-        cooperativeGestures: false
+        boxZoom: true,
+        keyboard: true,
+        dragging: true
     });
     
-    state.map.addControl(new maplibregl.AttributionControl({ 
-        compact: true, 
-        customAttribution: '© OpenStreetMap contributors' 
-    }), 'bottom-left');
-    
-    state.map.addControl(new maplibregl.NavigationControl({ 
-        showCompass: true,
-        showZoom: true,
-        visualizePitch: false
-    }), 'top-right');
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19
+    }).addTo(state.map);
     
     state.map.on('click', onMapClick);
 }
@@ -130,7 +119,7 @@ function addWaypointFromSearch(lat, lon, name) {
         calculateRoute(lastRoute);
     }
     
-    state.map.flyTo({ center: [lon, lat], zoom: 12, duration: 1000 });
+    state.map.flyTo([lat, lon], 12, { duration: 1 });
     renderRoutesList();
     showInfo(`Adicionado: ${name.split(',')[0]}`);
 }
@@ -144,7 +133,9 @@ function createNewRoute() {
         traveledMeters: 0, 
         speedKmh: 80, 
         isPlaying: false, 
-        cumulativeDistances: [] 
+        cumulativeDistances: [],
+        leafletPolyline: null,
+        leafletMarkers: []
     };
     state.routes.push(route); 
     renderRoutesList(); 
@@ -154,39 +145,51 @@ function createNewRoute() {
 function onMapClick(e) {
     if (state.routes.length === 0) createNewRoute();
     const lastRoute = state.routes[state.routes.length - 1];
-    lastRoute.waypoints.push({ lat: e.lngLat.lat, lon: e.lngLat.lng });
-    addDraggableMarker(lastRoute.id, lastRoute.waypoints.length - 1, e.lngLat);
+    lastRoute.waypoints.push({ lat: e.latlng.lat, lon: e.latlng.lng });
+    addDraggableMarker(lastRoute.id, lastRoute.waypoints.length - 1, e.latlng);
     if (lastRoute.waypoints.length >= 2) calculateRoute(lastRoute);
     renderRoutesList();
 }
 
-function addDraggableMarker(routeId, pointIndex, lngLat) {
-    const el = document.createElement('div');
-    el.style.cssText = 'width:16px;height:16px;background:#1976D2;border:3px solid white;border-radius:50%;box-shadow:0 2px 4px rgba(0,0,0,0.3);cursor:move;';
-    el.title = 'Arraste para mover';
-    
-    const marker = new maplibregl.Marker({ element: el, draggable: true })
-        .setLngLat([lngLat.lon || lngLat.lng, lngLat.lat])
-        .addTo(state.map);
+function addDraggableMarker(routeId, pointIndex, latlng) {
+    const marker = L.marker([latlng.lat, latlng.lng || latlng.lon], {
+        draggable: true,
+        title: 'Arraste para mover'
+    }).addTo(state.map);
     
     marker.on('drag', (e) => {
         const route = state.routes.find(r => r.id == routeId);
         if (route && route.waypoints[pointIndex]) {
-            route.waypoints[pointIndex].lat = e.target.getLngLat().lat;
-            route.waypoints[pointIndex].lon = e.target.getLngLat().lng;
+            route.waypoints[pointIndex].lat = e.target.getLatLng().lat;
+            route.waypoints[pointIndex].lon = e.target.getLatLng().lng;
             if (route.waypoints.length >= 2) {
                 calculateRoute(route);
             }
         }
     });
     
+    marker.on('dragend', (e) => {
+        const route = state.routes.find(r => r.id == routeId);
+        if (route) {
+            calculateRoute(route);
+        }
+    });
+    
     if (!state.markers[routeId]) state.markers[routeId] = [];
     state.markers[routeId].push(marker);
+    
+    if (!route.leafletMarkers) route.leafletMarkers = [];
+    route.leafletMarkers.push(marker);
 }
 
 async function calculateRoute(route) {
     if (route.waypoints.length < 2) return;
     showInfo('Calculando rota...');
+    
+    if (route.leafletPolyline) {
+        state.map.removeLayer(route.leafletPolyline);
+    }
+    
     try {
         const coords = route.waypoints.map(w => `${w.lon},${w.lat}`).join(';');
         const response = await fetch(`https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson&steps=false`);
@@ -226,39 +229,22 @@ function calculateCumulativeDistances(polyline) {
 
 function drawPolyline(route) {
     const routeId = `route-${route.id}`;
-    if (state.polylines[routeId]) {
-        if (state.map.getLayer(routeId)) state.map.removeLayer(routeId);
-        if (state.map.getSource(routeId)) state.map.removeSource(routeId);
+    
+    if (route.leafletPolyline) {
+        state.map.removeLayer(route.leafletPolyline);
     }
-    const coordinates = route.polyline.map(p => [p.lon, p.lat]);
-    state.map.addSource(routeId, { 
-        type: 'geojson', 
-        data: { 
-            type: 'Feature', 
-            geometry: { 
-                type: 'LineString', 
-                coordinates: coordinates 
-            } 
-        } 
-    });
-    state.map.addLayer({ 
-        id: routeId, 
-        type: 'line', 
-        source: routeId, 
-        layout: { 
-            'line-join': 'round', 
-            'line-cap': 'round' 
-        }, 
-        paint: { 
-            'line-color': '#1976D2', 
-            'line-width': 4, 
-            'line-opacity': 0.8 
-        } 
-    });
-    state.polylines[routeId] = true;
+    
+    const coordinates = route.polyline.map(p => [p.lat, p.lon]);
+    route.leafletPolyline = L.polyline(coordinates, {
+        color: '#1976D2',
+        weight: 4,
+        opacity: 0.8,
+        lineCap: 'round',
+        lineJoin: 'round'
+    }).addTo(state.map);
+    
     if (coordinates.length > 0) {
-        const bounds = coordinates.reduce((b, c) => b.extend(c), new maplibregl.LngLatBounds(coordinates[0], coordinates[0]));
-        state.map.fitBounds(bounds, { padding: 50 });
+        state.map.fitBounds(route.leafletPolyline.getBounds(), { padding: [50, 50] });
     }
 }
 
@@ -266,14 +252,23 @@ function updateSimulatorMarker(route) {
     const markerId = `simulator-${route.id}`;
     const position = getPositionAtDistance(route);
     if (!position) return;
-    if (state.markers[markerId]) state.markers[markerId].remove();
-    const el = document.createElement('div');
-    el.style.cssText = 'width:20px;height:20px;background:#ff5722;border:3px solid white;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.4);';
-    const marker = new maplibregl.Marker({ element: el }).setLngLat([position.lon, position.lat]).addTo(state.map);
+    
+    if (state.markers[markerId]) {
+        state.map.removeLayer(state.markers[markerId]);
+    }
+    
+    const marker = L.circleMarker([position.lat, position.lon], {
+        radius: 10,
+        color: '#ff5722',
+        fillColor: '#ff5722',
+        fillOpacity: 1,
+        weight: 3
+    }).addTo(state.map);
+    
     state.markers[markerId] = marker;
+    
     if (route.isPlaying) {
-        const offset = calculateCameraOffset(position.lat, position.lon, CONFIG.markerOffsetMeters);
-        state.map.easeTo({ center: [offset.lon, offset.lat], zoom: 13, duration: 500, easing: t => t });
+        state.map.panTo([position.lat, position.lon], { animate: true, duration: 0.5 });
     }
 }
 
@@ -293,12 +288,6 @@ function getPositionAtDistance(route) {
     const t = segmentEnd > segmentStart ? (route.traveledMeters - segmentStart) / (segmentEnd - segmentStart) : 0;
     const p1 = route.polyline[segmentIndex - 1], p2 = route.polyline[segmentIndex];
     return { lat: p1.lat + (p2.lat - p1.lat) * t, lon: p1.lon + (p2.lon - p1.lon) * t };
-}
-
-function calculateCameraOffset(lat, lon, offsetMeters) {
-    const earthRadius = 6371000;
-    const offsetLon = offsetMeters / (earthRadius * Math.cos(lat * Math.PI / 180)) * 180 / Math.PI;
-    return { lat, lon: lon + offsetLon };
 }
 
 function startSimulationLoop() {
@@ -342,16 +331,23 @@ function deleteRoute(routeId) {
 
 function confirmDelete() {
     if (state.routeToDelete !== null) {
+        // Remove marcadores
         if (state.markers[state.routeToDelete]) {
-            state.markers[state.routeToDelete].forEach(m => m.remove());
+            state.markers[state.routeToDelete].forEach(m => state.map.removeLayer(m));
         }
+        
+        // Remove marcador do simulador
         const simMarkerId = `simulator-${state.routeToDelete}`;
         if (state.markers[simMarkerId]) {
-            state.markers[simMarkerId].remove();
+            state.map.removeLayer(state.markers[simMarkerId]);
         }
-        const polylineId = `route-${state.routeToDelete}`;
-        if (state.map.getLayer(polylineId)) state.map.removeLayer(polylineId);
-        if (state.map.getSource(polylineId)) state.map.removeSource(polylineId);
+        
+        // Remove polyline
+        const route = state.routes.find(r => r.id == state.routeToDelete);
+        if (route && route.leafletPolyline) {
+            state.map.removeLayer(route.leafletPolyline);
+        }
+        
         state.routes = state.routes.filter(r => r.id !== state.routeToDelete);
         state.routeToDelete = null;
         renderRoutesList();
