@@ -7,72 +7,56 @@
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#1976D2">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" 
-          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" 
-          crossorigin=""/>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div id="map"></div>
     
-    <!-- Botão toggle para mostrar/esconder busca -->
-    <button id="btn-toggle-search" class="btn-floating" title="Buscar cidades">
-        🔍
+    <!-- Botão flutuante toggle -->
+    <button id="btn-toggle-search" class="btn-floating" title="Criar Rota">
+        🗺️
     </button>
     
-    <!-- Painel de busca De: Para: (inicialmente escondido no mobile) -->
-    <div id="search-panel" class="search-panel hidden-mobile">
-        <div class="search-panel-header">
-            <h3>📍 Criar Rota</h3>
-            <button id="btn-close-search" class="btn-close">✕</button>
+    <!-- Painel de busca -->
+    <div id="search-panel" class="search-panel">
+        <div class="panel-header">
+            <span>📍 Rota</span>
+            <button id="btn-close-search" class="btn-icon">✕</button>
         </div>
-        <div class="route-search-box">
-            <div class="search-field">
-                <label>📍 De:</label>
-                <input type="text" id="city-from" placeholder="Cidade de origem..." autocomplete="off">
-                <div id="from-results" class="search-results hidden"></div>
-            </div>
-            <div class="search-field">
-                <label> Para:</label>
-                <input type="text" id="city-to" placeholder="Cidade de destino..." autocomplete="off">
-                <div id="to-results" class="search-results hidden"></div>
-            </div>
-            <button id="btn-calculate-route" class="btn-primary btn-full">🚀 Criar Rota</button>
+        <div class="panel-content">
+            <input type="text" id="city-from" placeholder="De: origem..." autocomplete="off">
+            <div id="from-results" class="search-results hidden"></div>
+            <input type="text" id="city-to" placeholder="Para: destino..." autocomplete="off">
+            <div id="to-results" class="search-results hidden"></div>
+            <button id="btn-calculate-route" class="btn-primary">🚀 Criar</button>
         </div>
-        <p class="hint">👆 Ou clique no mapa para rota manual</p>
     </div>
     
     <!-- Painel de rotas -->
     <div class="routes-panel">
-        <div class="routes-header">
-            <h3>📍 Rotas</h3>
-            <div class="header-buttons">
-                <button id="btn-pause-all" class="btn-warning btn-small" title="Pausar/Retomar todas">⏸️</button>
-                <button id="btn-new-route" class="btn-primary btn-small">+ Nova</button>
+        <div class="panel-header">
+            <span>📍 Rotas</span>
+            <div class="header-btns">
+                <button id="btn-pause-all" class="btn-warning">⏸️</button>
+                <button id="btn-new-route" class="btn-primary btn-sm">+ Nova</button>
             </div>
         </div>
         <div id="routes-list"></div>
     </div>
     
-    <!-- Modal de confirmação -->
+    <!-- Modal -->
     <div id="confirm-modal" class="modal hidden">
         <div class="modal-content">
-            <p>Excluir esta rota permanentemente?</p>
+            <p>Excluir rota?</p>
             <div class="modal-actions">
-                <button id="btn-confirm-delete" class="btn-danger btn-small">Excluir</button>
-                <button id="btn-cancel-delete" class="btn-secondary btn-small">Cancelar</button>
+                <button id="btn-confirm-delete" class="btn-danger">Excluir</button>
+                <button id="btn-cancel-delete" class="btn-secondary">Cancelar</button>
             </div>
         </div>
     </div>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" 
-            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" 
-            crossorigin=""></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
     <script src="app.js"></script>
-    <script>
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('sw.js').catch(console.error);
-        }
-    </script>
 </body>
 </html>
