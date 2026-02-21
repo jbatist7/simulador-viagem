@@ -5,9 +5,9 @@ const state = {
     map: null, 
     markers: {}, 
     routeToDelete: null,
-    editingRouteId: null,
-    editMode: null, // 'add', 'move', 'delete'
-    tempMarker: null
+    allPaused: false,
+    waypointFrom: null,
+    waypointTo: null
 };
 
 // Configurações
@@ -23,12 +23,12 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 Iniciando Simulador...');
     initMap(); 
     setupEventListeners(); 
-    setupSearchBox();
+    setupSearchBoxes();
     startSimulationLoop(); 
     console.log('✅ Pronto!');
 });
 
-// Inicializar mapa
+// Inicializar mapa com labels
 function initMap() {
     state.map = L.map('map', {
         center: CONFIG.defaultCenter,
@@ -37,22 +37,38 @@ function initMap() {
         scrollWheelZoom: true
     });
     
-    // Mapa de satélite Esri
+    // Camada de satélite
     L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
         attribution: 'Esri',
-        maxZoom: 19
+        maxZoom: 19,
+        opacity: 1
+    }).addTo(state.map);
+    
+    // Camada de labels (cidades, rodovias, lugares)
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
+        attribution: '',
+        maxZoom: 19,
+        opacity: 0.8
+    }).addTo(state.map);
+    
+    // Camada adicional para rodovias e transporte
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}', {
+        attribution: '',
+        maxZoom: 19,
+        opacity: 0.7
     }).addTo(state.map);
     
     state.map.on('click', onMapClick);
 }
 
-// Event listeners
+// Configurar event listeners
 function setupEventListeners() {
     document.getElementById('btn-new-route').addEventListener('click', createNewRoute);
     document.getElementById('btn-confirm-delete').addEventListener('click', confirmDelete);
     document.getElementById('btn-cancel-delete').addEventListener('click', cancelDelete);
+    document.getElementById('btn-calculate-route').addEventListener('click', calculateRouteFromTo);
+    document.getElementById('btn-pause-all').addEventListener('click', togglePauseAll);
     
-    // Tornar painel arrastável
     makePanelDraggable();
 }
 
@@ -96,13 +112,29 @@ function makePanelDraggable() {
     });
 }
 
-// Busca de cidades
-function setupSearchBox() {
-    const searchInput = document.getElementById('city-search');
-    const resultsDiv = document.getElementById('search-results');
+// Configurar caixas de busca De: Para:
+function setupSearchBoxes() {
+    setupSearchBox('city-from', 'from-results', (lat, lon, name) => {
+        state.waypointFrom = { lat, lon, name };
+        document.getElementById('city-from').value = name.split(',')[0];
+        document.getElementById('from-results').classList.add('hidden');
+        showInfo(`📍 Origem: ${name.split(',')[0]}`);
+    });
+    
+    setupSearchBox('city-to', 'to-results', (lat, lon, name) => {
+        state.waypointTo = { lat, lon, name };
+        document.getElementById('city-to').value = name.split(',')[0];
+        document.getElementById('to-results').classList.add('hidden');
+        showInfo(`🎯 Destino: ${name.split(',')[0]}`);
+    });
+}
+
+function setupSearchBox(inputId, resultsId, onSelect) {
+    const input = document.getElementById(inputId);
+    const resultsDiv = document.getElementById(resultsId);
     let searchTimeout;
     
-    searchInput.addEventListener('input', (e) => {
+    input.addEventListener('input', (e) => {
         clearTimeout(searchTimeout);
         const query = e.target.value.trim();
         
@@ -111,19 +143,17 @@ function setupSearchBox() {
             return;
         }
         
-        searchTimeout = setTimeout(() => searchCity(query), 500);
+        searchTimeout = setTimeout(() => searchCity(query, resultsDiv, onSelect), 500);
     });
     
     document.addEventListener('click', (e) => {
-        if (!e.target.closest('.search-box')) {
+        if (!e.target.closest(`#${inputId}`) && !e.target.closest(`#${resultsId}`)) {
             resultsDiv.classList.add('hidden');
         }
     });
 }
 
-async function searchCity(query) {
-    const resultsDiv = document.getElementById('search-results');
-    
+async function searchCity(query, resultsDiv, onSelect) {
     try {
         const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1`);
         const results = await response.json();
@@ -134,14 +164,19 @@ async function searchCity(query) {
             return;
         }
         
-        resultsDiv.innerHTML = results.map(place => `
-            <div class="search-result-item" 
-                 data-lat="${place.lat}" 
-                 data-lon="${place.lon}" 
-                 data-name="${place.display_name}">
-                📍 ${place.display_name.split(',')[0]}
-            </div>
-        `).join('');
+        resultsDiv.innerHTML = results.map(place => {
+            const displayName = place.display_name.split(',')[0];
+            const type = place.type || 'local';
+            return `
+                <div class="search-result-item" 
+                     data-lat="${place.lat}" 
+                     data-lon="${place.lon}" 
+                     data-name="${place.display_name}">
+                    📍 ${displayName}
+                    <div style="font-size:10px;color:#888">${type}</div>
+                </div>
+            `;
+        }).join('');
         
         resultsDiv.classList.remove('hidden');
         
@@ -150,10 +185,7 @@ async function searchCity(query) {
                 const lat = parseFloat(item.dataset.lat);
                 const lon = parseFloat(item.dataset.lon);
                 const name = item.dataset.name;
-                
-                addWaypointFromSearch(lat, lon, name);
-                resultsDiv.classList.add('hidden');
-                document.getElementById('city-search').value = '';
+                onSelect(lat, lon, name);
             });
         });
     } catch (error) {
@@ -161,21 +193,54 @@ async function searchCity(query) {
     }
 }
 
-function addWaypointFromSearch(lat, lon, name) {
-    if (state.routes.length === 0) createNewRoute();
-    
-    const lastRoute = state.routes[state.routes.length - 1];
-    lastRoute.waypoints.push({ lat, lon, name });
-    
-    addDraggableMarker(lastRoute.id, lastRoute.waypoints.length - 1, { lat, lon });
-    
-    if (lastRoute.waypoints.length >= 2) {
-        calculateRoute(lastRoute);
+// Calcular rota De: Para:
+async function calculateRouteFromTo() {
+    if (!state.waypointFrom || !state.waypointTo) {
+        showInfo('⚠️ Selecione origem e destino');
+        return;
     }
     
-    state.map.flyTo([lat, lon], 12, { duration: 1.5 });
+    console.log('🚀 Criando rota De:Para:', state.waypointFrom.name, '→', state.waypointTo.name);
+    
+    // Criar nova rota
+    const route = { 
+        id: state.nextRouteId++, 
+        waypoints: [
+            { lat: state.waypointFrom.lat, lon: state.waypointFrom.lon, name: state.waypointFrom.name },
+            { lat: state.waypointTo.lat, lon: state.waypointTo.lon, name: state.waypointTo.name }
+        ], 
+        polyline: [], 
+        totalMeters: 0, 
+        traveledMeters: 0, 
+        speedKmh: 80, 
+        isPlaying: false, 
+        cumulativeDistances: [],
+        leafletPolyline: null,
+        leafletMarkers: []
+    };
+    
+    // Adicionar marcadores
+    addDraggableMarker(route.id, 0, { lat: route.waypoints[0].lat, lon: route.waypoints[0].lon });
+    addDraggableMarker(route.id, 1, { lat: route.waypoints[1].lat, lon: route.waypoints[1].lon });
+    
+    state.routes.push(route);
+    
+    // Calcular rota
+    await calculateRoute(route);
+    
+    // Centralizar mapa
+    if (route.leafletPolyline) {
+        state.map.fitBounds(route.leafletPolyline.getBounds(), { padding: [50, 50], maxZoom: 10 });
+    }
+    
     renderRoutesList();
-    showInfo(`✅ ${name.split(',')[0]}`);
+    showInfo(`✅ Rota #${route.id}: ${state.waypointFrom.name.split(',')[0]} → ${state.waypointTo.name.split(',')[0]}`);
+    
+    // Limpar campos
+    document.getElementById('city-from').value = '';
+    document.getElementById('city-to').value = '';
+    state.waypointFrom = null;
+    state.waypointTo = null;
 }
 
 function createNewRoute() {
@@ -194,16 +259,10 @@ function createNewRoute() {
     
     state.routes.push(route); 
     renderRoutesList(); 
-    showInfo('🆕 Clique no mapa ou busque cidades');
+    showInfo('🆕 Clique no mapa para adicionar pontos');
 }
 
 function onMapClick(e) {
-    // Se estiver em modo de edição (adicionar ponto)
-    if (state.editingRouteId && state.editMode === 'add') {
-        addPointToRoute(state.editingRouteId, e.latlng);
-        return;
-    }
-    
     if (state.routes.length === 0) {
         createNewRoute();
     }
@@ -220,10 +279,10 @@ function onMapClick(e) {
     renderRoutesList();
 }
 
-function addDraggableMarker(routeId, pointIndex, latlng, isIntermediate = false) {
+function addDraggableMarker(routeId, pointIndex, latlng) {
     const marker = L.marker([latlng.lat, latlng.lng], {
         draggable: true,
-        title: isIntermediate ? 'Ponto intermediário' : `Ponto ${pointIndex + 1}`
+        title: `Ponto ${pointIndex + 1}`
     }).addTo(state.map);
     
     marker.on('drag', (e) => {
@@ -249,20 +308,6 @@ function addDraggableMarker(routeId, pointIndex, latlng, isIntermediate = false)
         if (!route.leafletMarkers) route.leafletMarkers = [];
         route.leafletMarkers.push(marker);
     }
-}
-
-function addPointToRoute(routeId, latlng) {
-    const route = state.routes.find(r => r.id == routeId);
-    if (!route) return;
-    
-    // Adicionar ponto no final
-    route.waypoints.push({ lat: latlng.lat, lon: latlng.lng });
-    
-    addDraggableMarker(routeId, route.waypoints.length - 1, latlng);
-    calculateRoute(route);
-    renderRoutesList();
-    
-    showInfo(`➕ Ponto ${route.waypoints.length} adicionado`);
 }
 
 async function calculateRoute(route) {
@@ -336,10 +381,8 @@ function drawPolyline(route) {
     }
 }
 
-// Loop de simulação CORRIGIDO
+// Loop de simulação
 function startSimulationLoop() {
-    console.log('⏱️ Loop iniciado');
-    
     setInterval(() => {
         state.routes.forEach(route => {
             if (route.isPlaying && route.totalMeters > 0) {
@@ -356,6 +399,34 @@ function startSimulationLoop() {
             }
         });
     }, 100);
+}
+
+// Pausar/Retomar todas
+function togglePauseAll() {
+    if (state.routes.length === 0) {
+        showInfo('⚠️ Nenhuma rota ativa');
+        return;
+    }
+    
+    state.allPaused = !state.allPaused;
+    
+    state.routes.forEach(route => {
+        if (state.allPaused) {
+            route._wasPlaying = route.isPlaying;
+            route.isPlaying = false;
+        } else {
+            if (route._wasPlaying) {
+                route.isPlaying = true;
+            }
+        }
+    });
+    
+    const btn = document.getElementById('btn-pause-all');
+    btn.textContent = state.allPaused ? '▶️' : '⏸️';
+    btn.title = state.allPaused ? 'Retomar todas' : 'Pausar todas';
+    
+    showInfo(state.allPaused ? '⏸️ Todas pausadas' : '▶️ Todas retomadas');
+    renderRoutesList();
 }
 
 function updateSimulatorMarker(route) {
@@ -405,15 +476,10 @@ function getPositionAtDistance(route) {
     return { lat: p1.lat + (p2.lat - p1.lat) * t, lon: p1.lon + (p2.lon - p1.lon) * t };
 }
 
-// Toggle play/pause CORRIGIDO
+// Toggle play/pause
 window.togglePlay = function(routeId) {
-    console.log('🎮 Toggle play:', routeId);
-    
     const route = state.routes.find(r => r.id == routeId);
-    if (!route) {
-        console.error('Rota não encontrada:', routeId);
-        return;
-    }
+    if (!route) return;
     
     if (!route.polyline || route.polyline.length === 0) { 
         showInfo('⚠️ Calcule a rota primeiro'); 
@@ -421,8 +487,6 @@ window.togglePlay = function(routeId) {
     }
     
     route.isPlaying = !route.isPlaying;
-    console.log(route.isPlaying ? '▶️ Play' : '⏸️ Pause', 'Rota', route.id);
-    
     renderRoutesList();
 };
 
@@ -442,21 +506,6 @@ window.setSpeed = function(routeId, value) {
     if (route) {
         route.speedKmh = Math.max(CONFIG.minSpeed, Math.min(CONFIG.maxSpeed, parseFloat(value)));
     }
-};
-
-// Editar rota
-window.enableEditMode = function(routeId, mode) {
-    state.editingRouteId = routeId;
-    state.editMode = mode;
-    
-    if (mode === 'add') {
-        showInfo('➕ Clique no mapa para adicionar ponto');
-        state.map.getContainer().style.cursor = 'crosshair';
-    } else {
-        state.map.getContainer().style.cursor = '';
-    }
-    
-    renderRoutesList();
 };
 
 // Deletar rota
@@ -510,13 +559,16 @@ function renderRoutesList() {
     }
     
     container.innerHTML = state.routes.map(route => {
-        const progress = route.totalMeters > 0 ? (route.traveledMeters / route.totalMeters * 100) : 0;
-        const isEditing = state.editingRouteId === route.id;
+        const fromName = route.waypoints[0]?.name ? route.waypoints[0].name.split(',')[0] : 'Origem';
+        const toName = route.waypoints[route.waypoints.length - 1]?.name ? route.waypoints[route.waypoints.length - 1].name.split(',')[0] : 'Destino';
         
         return `
             <div class="route-card ${route.isPlaying ? 'active' : ''}">
                 <div class="route-header">
-                    <span class="route-title">🛣️ Rota #${route.id} (${route.waypoints.length} pts)</span>
+                    <div>
+                        <div class="route-title">🛣️ Rota #${route.id}</div>
+                        <div class="route-info">${fromName} → ${toName}</div>
+                    </div>
                     <button onclick="deleteRoute(${route.id})">🗑️</button>
                 </div>
                 <div class="route-controls">
@@ -540,22 +592,16 @@ function renderRoutesList() {
                            value="${route.speedKmh}" 
                            oninput="setSpeed(${route.id}, this.value)">
                 </div>
-                <div class="route-edit-tools">
-                    <button class="edit-tool-btn ${isEditing && state.editMode === 'add' ? 'active' : ''}" 
-                            onclick="enableEditMode(${route.id}, 'add')">
-                        ➕ Adicionar
-                    </button>
-                    <button class="edit-tool-btn" onclick="enableEditMode(${route.id}, null)">
-                        ✔️ OK
-                    </button>
-                </div>
             </div>
         `;
     }).join('');
 }
 
 function updateRouteCardUI(route) {
-    const card = document.querySelector(`.route-card:nth-child(${state.routes.indexOf(route) + 1})`);
+    const cards = document.querySelectorAll('.route-card');
+    const routeIndex = state.routes.findIndex(r => r.id == route.id);
+    const card = cards[routeIndex];
+    
     if (!card) return;
     
     const slider = card.querySelector('.progress-slider');
@@ -584,7 +630,7 @@ function showInfo(message) {
     if (infoCard) {
         infoCard.textContent = message;
         setTimeout(() => { 
-            infoCard.textContent = '👆 Toque no mapa ou busque cidades'; 
+            infoCard.textContent = '👆 Ou clique no mapa para criar rota manual'; 
         }, 3000);
     }
 }
