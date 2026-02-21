@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🗺️ Simulador de Viagem</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#1976D2">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="SimViagem">
+    <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="map"></div>
+    
+    <div class="info-card">
+        <p>👆 <strong>Toque no mapa</strong> para criar rotas (origem → destino → paradas)</p>
+        <p>🗺️ OpenStreetMap | 🛣️ OSRM</p>
+        <p class="attribution">© OpenStreetMap contributors</p>
+    </div>
+    
+    <div class="routes-panel">
+        <div class="routes-header">
+            <h3>📍 Minhas Rotas</h3>
+            <button id="btn-new-route" class="btn-primary">+ Nova Rota</button>
+        </div>
+        <div id="routes-list"></div>
+    </div>
+    
+    <div id="confirm-modal" class="modal hidden">
+        <div class="modal-content">
+            <p>Excluir esta rota permanentemente?</p>
+            <div class="modal-actions">
+                <button id="btn-confirm-delete" class="btn-danger">Excluir</button>
+                <button id="btn-cancel-delete" class="btn-secondary">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+    <script src="app.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js').catch(console.error);
+        }
+    </script>
+</body>
+</html>
