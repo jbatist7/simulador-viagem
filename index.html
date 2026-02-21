@@ -7,34 +7,37 @@
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#1976D2">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="SimViagem">
     <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div id="map"></div>
     
+    <!-- Painel superior compacto -->
     <div class="info-card">
-        <p>👆 <strong>Toque no mapa</strong> para criar rotas (origem → destino → paradas)</p>
-        <p>🗺️ OpenStreetMap | 🛣️ OSRM</p>
-        <p class="attribution">© OpenStreetMap contributors</p>
+        <div class="search-box">
+            <input type="text" id="city-search" placeholder="🔍 Buscar cidade..." autocomplete="off">
+            <div id="search-results" class="search-results hidden"></div>
+        </div>
+        <p class="hint">👆 Toque no mapa ou busque cidades</p>
     </div>
     
+    <!-- Painel de rotas compacto -->
     <div class="routes-panel">
         <div class="routes-header">
-            <h3>📍 Minhas Rotas</h3>
-            <button id="btn-new-route" class="btn-primary">+ Nova Rota</button>
+            <h3>📍 Rotas</h3>
+            <button id="btn-new-route" class="btn-primary btn-small">+ Nova</button>
         </div>
         <div id="routes-list"></div>
     </div>
     
+    <!-- Modal de confirmação -->
     <div id="confirm-modal" class="modal hidden">
         <div class="modal-content">
-            <p>Excluir esta rota permanentemente?</p>
+            <p>Excluir esta rota?</p>
             <div class="modal-actions">
-                <button id="btn-confirm-delete" class="btn-danger">Excluir</button>
-                <button id="btn-cancel-delete" class="btn-secondary">Cancelar</button>
+                <button id="btn-confirm-delete" class="btn-danger btn-small">Excluir</button>
+                <button id="btn-cancel-delete" class="btn-secondary btn-small">Cancelar</button>
             </div>
         </div>
     </div>
