@@ -37,7 +37,7 @@ Simulador de viagens com rotas reais, velocidade ajustável (40-700 km/h) e acom
 
 ## 🛠️ Tecnologias
 
-- MapLibre GL JS (mapa)
+- Leaflet.js (mapa)
 - OpenStreetMap (tiles)
 - OSRM (rotas)
 - PWA (instalável)
