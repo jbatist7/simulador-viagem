@@ -15,22 +15,37 @@
 <body>
     <div id="map"></div>
     
+    <!-- Painel de busca De: Para: -->
     <div class="info-card">
-        <div class="search-box">
-            <input type="text" id="city-search" placeholder="🔍 Buscar cidade..." autocomplete="off">
-            <div id="search-results" class="search-results hidden"></div>
+        <div class="route-search-box">
+            <div class="search-field">
+                <label>📍 De:</label>
+                <input type="text" id="city-from" placeholder="Cidade de origem..." autocomplete="off">
+                <div id="from-results" class="search-results hidden"></div>
+            </div>
+            <div class="search-field">
+                <label> Para:</label>
+                <input type="text" id="city-to" placeholder="Cidade de destino..." autocomplete="off">
+                <div id="to-results" class="search-results hidden"></div>
+            </div>
+            <button id="btn-calculate-route" class="btn-primary btn-full">🚀 Criar Rota</button>
         </div>
-        <p class="hint">👆 Toque no mapa ou busque cidades</p>
+        <p class="hint">👆 Ou clique no mapa para criar rota manual</p>
     </div>
     
+    <!-- Painel de rotas -->
     <div class="routes-panel">
         <div class="routes-header">
             <h3>📍 Rotas</h3>
-            <button id="btn-new-route" class="btn-primary btn-small">+ Nova</button>
+            <div class="header-buttons">
+                <button id="btn-pause-all" class="btn-warning btn-small" title="Pausar/Retomar todas">⏸️</button>
+                <button id="btn-new-route" class="btn-primary btn-small">+ Nova</button>
+            </div>
         </div>
         <div id="routes-list"></div>
     </div>
     
+    <!-- Modal de confirmação -->
     <div id="confirm-modal" class="modal hidden">
         <div class="modal-content">
             <p>Excluir esta rota permanentemente?</p>
