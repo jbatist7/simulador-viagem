@@ -15,8 +15,17 @@
 <body>
     <div id="map"></div>
     
-    <!-- Painel de busca De: Para: -->
-    <div class="info-card">
+    <!-- Botão toggle para mostrar/esconder busca -->
+    <button id="btn-toggle-search" class="btn-floating" title="Buscar cidades">
+        🔍
+    </button>
+    
+    <!-- Painel de busca De: Para: (inicialmente escondido no mobile) -->
+    <div id="search-panel" class="search-panel hidden-mobile">
+        <div class="search-panel-header">
+            <h3>📍 Criar Rota</h3>
+            <button id="btn-close-search" class="btn-close">✕</button>
+        </div>
         <div class="route-search-box">
             <div class="search-field">
                 <label>📍 De:</label>
@@ -30,7 +39,7 @@
             </div>
             <button id="btn-calculate-route" class="btn-primary btn-full">🚀 Criar Rota</button>
         </div>
-        <p class="hint">👆 Ou clique no mapa para criar rota manual</p>
+        <p class="hint">👆 Ou clique no mapa para rota manual</p>
     </div>
     
     <!-- Painel de rotas -->
