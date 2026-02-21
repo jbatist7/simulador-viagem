@@ -1,9 +1,25 @@
-const state = { routes: [], nextRouteId: 1, map: null, markers: {}, polylines: {}, routeToDelete: null };
-const CONFIG = { defaultCenter: [-51.9253, -14.2350], defaultZoom: 5, minSpeed: 40, maxSpeed: 700, markerOffsetMeters: 300 };
+const state = { 
+    routes: [], 
+    nextRouteId: 1, 
+    map: null, 
+    markers: {}, 
+    polylines: {}, 
+    routeToDelete: null,
+    draggedMarker: null,
+    draggedWaypointIndex: null
+};
+const CONFIG = { 
+    defaultCenter: [-51.9253, -14.2350], 
+    defaultZoom: 5, 
+    minSpeed: 40, 
+    maxSpeed: 700, 
+    markerOffsetMeters: 300 
+};
 
 document.addEventListener('DOMContentLoaded', () => { 
     initMap(); 
     setupEventListeners(); 
+    setupSearchBox();
     startSimulationLoop(); 
 });
 
@@ -14,32 +30,23 @@ function initMap() {
         center: CONFIG.defaultCenter, 
         zoom: CONFIG.defaultZoom, 
         attributionControl: false,
-        scrollZoom: true,      // Permite zoom com scroll do mouse
-        dragPan: true,         // Permite arrastar o mapa
-        boxZoom: true,         // Permite zoom com caixa (Shift + arrastar)
-        doubleClickZoom: true, // Permite zoom com duplo clique
-        touchZoomRotate: true, // Permite zoom com pinça no mobile
-        cooperativeGestures: false // Não requer Ctrl para scroll
+        scrollZoom: true,
+        dragPan: true,
+        boxZoom: true,
+        doubleClickZoom: true,
+        touchZoomRotate: true,
+        cooperativeGestures: false
     });
     
-    // Adiciona controle de atribuição
     state.map.addControl(new maplibregl.AttributionControl({ 
         compact: true, 
         customAttribution: '© OpenStreetMap contributors' 
     }), 'bottom-left');
     
-    // Adiciona controles de navegação (zoom +/-)
     state.map.addControl(new maplibregl.NavigationControl({ 
         showCompass: true,
         showZoom: true,
         visualizePitch: false
-    }), 'top-right');
-    
-    // Adiciona botão de localização atual (opcional)
-    state.map.addControl(new maplibregl.GeolocateControl({ 
-        positionOptions: { enableHighAccuracy: true },
-        trackUserLocation: false,
-        showUserHeading: false
     }), 'top-right');
     
     state.map.on('click', onMapClick);
@@ -49,6 +56,83 @@ function setupEventListeners() {
     document.getElementById('btn-new-route').addEventListener('click', createNewRoute);
     document.getElementById('btn-confirm-delete').addEventListener('click', confirmDelete);
     document.getElementById('btn-cancel-delete').addEventListener('click', cancelDelete);
+}
+
+function setupSearchBox() {
+    const searchInput = document.getElementById('city-search');
+    const resultsDiv = document.getElementById('search-results');
+    let searchTimeout;
+    
+    searchInput.addEventListener('input', (e) => {
+        clearTimeout(searchTimeout);
+        const query = e.target.value.trim();
+        
+        if (query.length < 3) {
+            resultsDiv.classList.add('hidden');
+            return;
+        }
+        
+        searchTimeout = setTimeout(() => {
+            searchCity(query);
+        }, 500);
+    });
+    
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.search-box')) {
+            resultsDiv.classList.add('hidden');
+        }
+    });
+}
+
+async function searchCity(query) {
+    const resultsDiv = document.getElementById('search-results');
+    try {
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1`);
+        const results = await response.json();
+        
+        if (results.length === 0) {
+            resultsDiv.classList.add('hidden');
+            return;
+        }
+        
+        resultsDiv.innerHTML = results.map(place => `
+            <div class="search-result-item" data-lat="${place.lat}" data-lon="${place.lon}" data-name="${place.display_name}">
+                📍 ${place.display_name.split(',')[0]}
+            </div>
+        `).join('');
+        
+        resultsDiv.classList.remove('hidden');
+        
+        resultsDiv.querySelectorAll('.search-result-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const lat = parseFloat(item.dataset.lat);
+                const lon = parseFloat(item.dataset.lon);
+                const name = item.dataset.name;
+                
+                addWaypointFromSearch(lat, lon, name);
+                resultsDiv.classList.add('hidden');
+                document.getElementById('city-search').value = '';
+            });
+        });
+    } catch (error) {
+        console.error('Erro na busca:', error);
+        resultsDiv.classList.add('hidden');
+    }
+}
+
+function addWaypointFromSearch(lat, lon, name) {
+    if (state.routes.length === 0) createNewRoute();
+    const lastRoute = state.routes[state.routes.length - 1];
+    lastRoute.waypoints.push({ lat, lon, name });
+    addDraggableMarker(lastRoute.id, lastRoute.waypoints.length - 1, { lat, lon });
+    
+    if (lastRoute.waypoints.length >= 2) {
+        calculateRoute(lastRoute);
+    }
+    
+    state.map.flyTo({ center: [lon, lat], zoom: 12, duration: 1000 });
+    renderRoutesList();
+    showInfo(`Adicionado: ${name.split(',')[0]}`);
 }
 
 function createNewRoute() {
@@ -64,16 +148,40 @@ function createNewRoute() {
     };
     state.routes.push(route); 
     renderRoutesList(); 
-    showInfo('Nova rota criada! Toque no mapa para adicionar pontos.');
+    showInfo('Nova rota! Busque cidades ou clique no mapa.');
 }
 
 function onMapClick(e) {
     if (state.routes.length === 0) createNewRoute();
     const lastRoute = state.routes[state.routes.length - 1];
     lastRoute.waypoints.push({ lat: e.lngLat.lat, lon: e.lngLat.lng });
-    addMarker(lastRoute.id, lastRoute.waypoints.length - 1, e.lngLat);
+    addDraggableMarker(lastRoute.id, lastRoute.waypoints.length - 1, e.lngLat);
     if (lastRoute.waypoints.length >= 2) calculateRoute(lastRoute);
     renderRoutesList();
+}
+
+function addDraggableMarker(routeId, pointIndex, lngLat) {
+    const el = document.createElement('div');
+    el.style.cssText = 'width:16px;height:16px;background:#1976D2;border:3px solid white;border-radius:50%;box-shadow:0 2px 4px rgba(0,0,0,0.3);cursor:move;';
+    el.title = 'Arraste para mover';
+    
+    const marker = new maplibregl.Marker({ element: el, draggable: true })
+        .setLngLat([lngLat.lon || lngLat.lng, lngLat.lat])
+        .addTo(state.map);
+    
+    marker.on('drag', (e) => {
+        const route = state.routes.find(r => r.id == routeId);
+        if (route && route.waypoints[pointIndex]) {
+            route.waypoints[pointIndex].lat = e.target.getLngLat().lat;
+            route.waypoints[pointIndex].lon = e.target.getLngLat().lng;
+            if (route.waypoints.length >= 2) {
+                calculateRoute(route);
+            }
+        }
+    });
+    
+    if (!state.markers[routeId]) state.markers[routeId] = [];
+    state.markers[routeId].push(marker);
 }
 
 async function calculateRoute(route) {
@@ -90,10 +198,10 @@ async function calculateRoute(route) {
         route.traveledMeters = 0;
         route.cumulativeDistances = calculateCumulativeDistances(route.polyline);
         drawPolyline(route);
-        showInfo(`Rota calculada: ${(route.totalMeters / 1000).toFixed(1)} km`);
+        showInfo(`Rota: ${(route.totalMeters / 1000).toFixed(1)} km`);
     } catch (error) {
         console.error('Erro na rota:', error);
-        showInfo('Erro ao calcular rota. Usando linha reta.');
+        showInfo('Erro. Usando linha reta.');
         createDirectLine(route);
     }
     renderRoutesList();
@@ -114,14 +222,6 @@ function calculateCumulativeDistances(polyline) {
         cumulative.push(sum);
     }
     return cumulative;
-}
-
-function addMarker(routeId, pointIndex, lngLat) {
-    const el = document.createElement('div');
-    el.style.cssText = 'width:16px;height:16px;background:#1976D2;border:3px solid white;border-radius:50%;box-shadow:0 2px 4px rgba(0,0,0,0.3);';
-    const marker = new maplibregl.Marker({ element: el }).setLngLat(lngLat).addTo(state.map);
-    if (!state.markers[routeId]) state.markers[routeId] = [];
-    state.markers[routeId].push(marker);
 }
 
 function drawPolyline(route) {
@@ -217,7 +317,7 @@ function startSimulationLoop() {
 
 function togglePlay(route) {
     if (route.polyline.length === 0) { 
-        showInfo('Adicione pelo menos 2 pontos à rota'); 
+        showInfo('Adicione pelo menos 2 pontos'); 
         return; 
     }
     route.isPlaying = !route.isPlaying;
@@ -268,13 +368,13 @@ function cancelDelete() {
 function renderRoutesList() {
     const container = document.getElementById('routes-list');
     if (state.routes.length === 0) {
-        container.innerHTML = '<p style="text-align:center;color:#888;padding:20px;">Nenhuma rota criada. Toque no mapa para começar!</p>';
+        container.innerHTML = '<p style="text-align:center;color:#888;padding:15px;font-size:12px;">Nenhuma rota. Busque cidades ou clique no mapa!</p>';
         return;
     }
     container.innerHTML = state.routes.map(route => `
         <div class="route-card ${route.isPlaying ? 'active' : ''}" data-route-id="${route.id}">
             <div class="route-header">
-                <span class="route-title">🛣️ Rota #${route.id} (${route.waypoints.length} pontos)</span>
+                <span class="route-title">🛣️ Rota #${route.id} (${route.waypoints.length} pts)</span>
                 <div class="route-actions">
                     <button class="btn-icon" onclick="deleteRoute(${route.id})">🗑️</button>
                 </div>
@@ -288,9 +388,9 @@ function renderRoutesList() {
                     oninput="seekRoute(${route.id}, this.value)">
             </div>
             <div class="route-stats">
-                <span>📏 ${(route.totalMeters / 1000).toFixed(1)} km total</span>
-                <span>✅ ${(route.traveledMeters / 1000).toFixed(1)} km feito</span>
-                <span>⏳ ${(Math.max(0, route.totalMeters - route.traveledMeters) / 1000).toFixed(1)} km resta</span>
+                <span>📏 ${(route.totalMeters / 1000).toFixed(1)} km</span>
+                <span>✅ ${(route.traveledMeters / 1000).toFixed(1)} km</span>
+                <span>⏳ ${(Math.max(0, route.totalMeters - route.traveledMeters) / 1000).toFixed(1)} km</span>
             </div>
             <div class="speed-control">
                 <span>🚗 ${route.speedKmh} km/h</span>
@@ -310,20 +410,20 @@ function updateRouteCard(route) {
     if (slider) slider.value = route.totalMeters > 0 ? route.traveledMeters / route.totalMeters : 0;
     if (stats) {
         stats.innerHTML = `
-            <span>📏 ${(route.totalMeters / 1000).toFixed(1)} km total</span>
-            <span>✅ ${(route.traveledMeters / 1000).toFixed(1)} km feito</span>
-            <span>⏳ ${(Math.max(0, route.totalMeters - route.traveledMeters) / 1000).toFixed(1)} km resta</span>
+            <span>📏 ${(route.totalMeters / 1000).toFixed(1)} km</span>
+            <span>✅ ${(route.traveledMeters / 1000).toFixed(1)} km</span>
+            <span>⏳ ${(Math.max(0, route.totalMeters - route.traveledMeters) / 1000).toFixed(1)} km</span>
         `;
     }
     if (speedDisplay) speedDisplay.textContent = `🚗 ${route.speedKmh} km/h`;
 }
 
 function showInfo(message) {
-    const infoCard = document.querySelector('.info-card p:first-child');
+    const infoCard = document.querySelector('.hint');
     if (infoCard) {
         infoCard.textContent = `ℹ️ ${message}`;
         setTimeout(() => { 
-            infoCard.textContent = '👆 Toque no mapa para criar rotas (origem → destino → paradas)'; 
+            infoCard.textContent = '👆 Toque no mapa ou busque cidades'; 
         }, 3000);
     }
 }
@@ -338,7 +438,6 @@ function haversineDistance(lat1, lon1, lat2, lon2) {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
-// Funções globais para os botões
 window.togglePlay = togglePlay; 
 window.seekRoute = (id, v) => seekRoute(state.routes.find(r => r.id == id), parseFloat(v));
 window.setSpeed = (id, v) => setSpeed(state.routes.find(r => r.id == id), parseFloat(v)); 
