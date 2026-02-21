@@ -1,7 +1,7 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body { 
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; 
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
     overflow: hidden; 
     background: #1a1a1a; 
 }
@@ -15,72 +15,120 @@ body {
     z-index: 1; 
 }
 
-/* Painel superior compacto */
+/* Painel de busca De: Para: */
 .info-card {
     position: absolute; 
     top: 10px; 
     left: 10px;
     background: rgba(255, 255, 255, 0.98); 
-    padding: 8px 12px; 
+    padding: 10px; 
     border-radius: 8px;
     box-shadow: 0 2px 12px rgba(0,0,0,0.2); 
     z-index: 1000;
-    max-width: 350px;
+    width: 320px;
 }
 
-.search-box { 
-    position: relative; 
-    margin-bottom: 6px; 
+.route-search-box {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 
-#city-search {
-    width: 100%; 
-    padding: 8px 12px; 
-    border: 2px solid #1976D2;
-    border-radius: 6px; 
-    font-size: 13px; 
+.search-field {
+    position: relative;
+}
+
+.search-field label {
+    display: block;
+    font-size: 10px;
+    color: #666;
+    margin-bottom: 2px;
+    font-weight: 600;
+}
+
+.search-field input {
+    width: 100%;
+    padding: 8px 10px;
+    border: 2px solid #e0e0e0;
+    border-radius: 6px;
+    font-size: 12px;
     outline: none;
+    transition: all 0.3s;
 }
 
-#city-search:focus { 
-    border-color: #0d47a1; 
-    box-shadow: 0 0 0 3px rgba(25,118,210,0.15); 
+.search-field input:focus {
+    border-color: #1976D2;
+    box-shadow: 0 0 0 3px rgba(25,118,210,0.1);
 }
 
 .search-results {
-    position: absolute; 
-    top: 100%; 
-    left: 0; 
+    position: absolute;
+    top: 100%;
+    left: 0;
     right: 0;
-    background: white; 
+    background: white;
     border: 1px solid #e0e0e0;
-    border-radius: 6px; 
-    max-height: 200px; 
+    border-radius: 6px;
+    max-height: 200px;
     overflow-y: auto;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15); 
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     z-index: 1001;
     margin-top: 4px;
 }
 
 .search-result-item {
-    padding: 8px 12px; 
-    cursor: pointer; 
+    padding: 8px 10px;
+    cursor: pointer;
     border-bottom: 1px solid #f0f0f0;
-    font-size: 12px; 
+    font-size: 11px;
     transition: all 0.2s;
 }
 
-.search-result-item:hover { 
-    background: #e3f2fd; 
+.search-result-item:hover {
+    background: #e3f2fd;
 }
 
-.hint { 
-    font-size: 10px; 
-    color: #666; 
-    margin: 0; 
+.search-result-item:last-child {
+    border-bottom: none;
 }
 
-/* Painel de rotas ARRASTÁVEL e COMPACTO */
+.btn-full {
+    width: 100%;
+    padding: 10px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.hint {
+    font-size: 10px;
+    color: #666;
+    margin: 8px 0 0 0;
+    text-align: center;
+}
+
+/* Botões do cabeçalho */
+.header-buttons {
+    display: flex;
+    gap: 6px;
+}
+
+.btn-warning {
+    background: #ff9800;
+    color: white;
+    border: none;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.2s;
+}
+
+.btn-warning:hover {
+    background: #f57c00;
+}
+
+/* Painel de rotas */
 .routes-panel {
     position: absolute; 
     bottom: 10px; 
@@ -114,21 +162,6 @@ body {
     margin: 0;
 }
 
-.routes-header .btn-primary {
-    background: white;
-    color: #1976D2;
-    border: none;
-    padding: 4px 10px;
-    border-radius: 4px;
-    font-size: 11px;
-    cursor: pointer;
-    font-weight: 600;
-}
-
-.routes-header .btn-primary:hover {
-    background: #f5f5f5;
-}
-
 #routes-list { 
     flex: 1; 
     overflow-y: auto; 
@@ -136,7 +169,7 @@ body {
     max-height: 35vh;
 }
 
-/* Cards de rota ultra compactos */
+/* Cards de rota */
 .route-card {
     background: #f9f9f9; 
     border-radius: 6px; 
@@ -163,6 +196,12 @@ body {
     color: #333; 
 }
 
+.route-info {
+    font-size: 9px;
+    color: #666;
+    margin-top: 2px;
+}
+
 .route-actions { 
     display: flex; 
     gap: 2px; 
@@ -182,7 +221,7 @@ body {
     opacity: 1;
 }
 
-/* Controles compactos */
+/* Controles */
 .route-controls { 
     display: flex; 
     align-items: center; 
@@ -228,7 +267,7 @@ body {
     cursor: pointer;
 }
 
-/* Estatísticas compactas */
+/* Estatísticas */
 .route-stats { 
     display: flex; 
     justify-content: space-between; 
@@ -268,6 +307,19 @@ body {
 }
 
 /* Botões */
+.btn-primary {
+    background: #1976D2;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-primary:hover {
+    background: #1565C0;
+}
+
 .btn-danger {
     background: #d32f2f;
     color: white;
@@ -286,6 +338,11 @@ body {
     border-radius: 4px;
     font-size: 10px;
     cursor: pointer;
+}
+
+.btn-small {
+    padding: 4px 8px;
+    font-size: 11px;
 }
 
 /* Modal */
@@ -330,36 +387,6 @@ body {
     display: none !important; 
 }
 
-/* Botões de edição de rota */
-.route-edit-tools {
-    display: flex;
-    gap: 4px;
-    margin-top: 6px;
-    padding-top: 6px;
-    border-top: 1px solid #e0e0e0;
-}
-
-.edit-tool-btn {
-    flex: 1;
-    background: #f0f0f0;
-    border: 1px solid #d0d0d0;
-    border-radius: 4px;
-    padding: 4px 8px;
-    font-size: 10px;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.edit-tool-btn:hover {
-    background: #e0e0e0;
-}
-
-.edit-tool-btn.active {
-    background: #1976D2;
-    color: white;
-    border-color: #1976D2;
-}
-
 /* Scrollbar */
 #routes-list::-webkit-scrollbar,
 .search-results::-webkit-scrollbar {
@@ -379,6 +406,11 @@ body {
 
 /* Responsivo */
 @media (max-width: 768px) {
+    .info-card {
+        width: calc(100% - 20px);
+        left: 10px;
+        right: 10px;
+    }
     .routes-panel {
         width: calc(100% - 20px);
         right: 10px;
