@@ -7,7 +7,8 @@ const state = {
     routeToDelete: null,
     allPaused: false,
     waypointFrom: null,
-    waypointTo: null
+    waypointTo: null,
+    searchPanelVisible: true
 };
 
 // Configurações
@@ -28,7 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('✅ Pronto!');
 });
 
-// Inicializar mapa com labels
+// Inicializar mapa - ORDEM DAS CAMADAS CORRIGIDA
 function initMap() {
     state.map = L.map('map', {
         center: CONFIG.defaultCenter,
@@ -37,25 +38,30 @@ function initMap() {
         scrollWheelZoom: true
     });
     
-    // Camada de satélite
+    // 1ª camada: Satélite (base)
     L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
         attribution: 'Esri',
         maxZoom: 19,
         opacity: 1
     }).addTo(state.map);
     
-    // Camada de labels (cidades, rodovias, lugares)
+    // 2ª camada: Rotas (polyline vai aqui - entre base e labels)
+    // As rotas serão adicionadas dinamicamente com zIndex: 2
+    
+    // 3ª camada: Labels (cidades, lugares) - POR ÚLTIMO para ficar por cima
     L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
         attribution: '',
         maxZoom: 19,
-        opacity: 0.8
+        opacity: 0.9,
+        zIndex: 10
     }).addTo(state.map);
     
-    // Camada adicional para rodovias e transporte
+    // 4ª camada: Rodovias e transporte
     L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}', {
         attribution: '',
         maxZoom: 19,
-        opacity: 0.7
+        opacity: 0.8,
+        zIndex: 11
     }).addTo(state.map);
     
     state.map.on('click', onMapClick);
@@ -63,6 +69,13 @@ function initMap() {
 
 // Configurar event listeners
 function setupEventListeners() {
+    // Toggle search panel
+    document.getElementById('btn-toggle-search').addEventListener('click', toggleSearchPanel);
+    document.getElementById('btn-close-search').addEventListener('click', () => {
+        document.getElementById('search-panel').classList.add('hidden-mobile');
+        state.searchPanelVisible = false;
+    });
+    
     document.getElementById('btn-new-route').addEventListener('click', createNewRoute);
     document.getElementById('btn-confirm-delete').addEventListener('click', confirmDelete);
     document.getElementById('btn-cancel-delete').addEventListener('click', cancelDelete);
@@ -72,16 +85,43 @@ function setupEventListeners() {
     makePanelDraggable();
 }
 
-// Tornar painel arrastável
-function makePanelDraggable() {
-    const panel = document.querySelector('.routes-panel');
-    const header = document.querySelector('.routes-header');
+// Toggle search panel
+function toggleSearchPanel() {
+    const panel = document.getElementById('search-panel');
+    state.searchPanelVisible = !state.searchPanelVisible;
     
+    if (state.searchPanelVisible) {
+        panel.classList.remove('hidden-mobile');
+    } else {
+        panel.classList.add('hidden-mobile');
+    }
+}
+
+// Tornar painéis arrastáveis
+function makePanelDraggable() {
+    // Search panel
+    const searchPanel = document.getElementById('search-panel');
+    const searchHeader = document.querySelector('.search-panel-header');
+    
+    if (searchHeader) {
+        makeDraggable(searchPanel, searchHeader);
+    }
+    
+    // Routes panel
+    const routesPanel = document.querySelector('.routes-panel');
+    const routesHeader = document.querySelector('.routes-header');
+    
+    if (routesHeader) {
+        makeDraggable(routesPanel, routesHeader);
+    }
+}
+
+function makeDraggable(panel, header) {
     let isDragging = false;
     let startX, startY, initialX, initialY;
     
     header.addEventListener('mousedown', (e) => {
-        if (e.target.tagName === 'BUTTON') return;
+        if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
         
         isDragging = true;
         startX = e.clientX;
@@ -92,6 +132,7 @@ function makePanelDraggable() {
         initialY = rect.top;
         
         panel.style.transition = 'none';
+        panel.style.position = 'absolute';
         e.preventDefault();
     });
     
@@ -112,7 +153,7 @@ function makePanelDraggable() {
     });
 }
 
-// Configurar caixas de busca De: Para:
+// Configurar caixas de busca
 function setupSearchBoxes() {
     setupSearchBox('city-from', 'from-results', (lat, lon, name) => {
         state.waypointFrom = { lat, lon, name };
@@ -173,7 +214,7 @@ async function searchCity(query, resultsDiv, onSelect) {
                      data-lon="${place.lon}" 
                      data-name="${place.display_name}">
                     📍 ${displayName}
-                    <div style="font-size:10px;color:#888">${type}</div>
+                    <div style="font-size:9px;color:#888">${type}</div>
                 </div>
             `;
         }).join('');
@@ -193,14 +234,18 @@ async function searchCity(query, resultsDiv, onSelect) {
     }
 }
 
-// Calcular rota De: Para:
+// Calcular rota De: Para: - CORRIGIDO
 async function calculateRouteFromTo() {
+    console.log('🔘 Botão Criar Rota clicado');
+    console.log('Origem:', state.waypointFrom);
+    console.log('Destino:', state.waypointTo);
+    
     if (!state.waypointFrom || !state.waypointTo) {
         showInfo('⚠️ Selecione origem e destino');
         return;
     }
     
-    console.log('🚀 Criando rota De:Para:', state.waypointFrom.name, '→', state.waypointTo.name);
+    console.log('🚀 Criando rota:', state.waypointFrom.name, '→', state.waypointTo.name);
     
     // Criar nova rota
     const route = { 
@@ -234,7 +279,7 @@ async function calculateRouteFromTo() {
     }
     
     renderRoutesList();
-    showInfo(`✅ Rota #${route.id}: ${state.waypointFrom.name.split(',')[0]} → ${state.waypointTo.name.split(',')[0]}`);
+    showInfo(`✅ Rota #${route.id} criada!`);
     
     // Limpar campos
     document.getElementById('city-from').value = '';
@@ -282,7 +327,8 @@ function onMapClick(e) {
 function addDraggableMarker(routeId, pointIndex, latlng) {
     const marker = L.marker([latlng.lat, latlng.lng], {
         draggable: true,
-        title: `Ponto ${pointIndex + 1}`
+        title: `Ponto ${pointIndex + 1}`,
+        zIndexOffset: 5
     }).addTo(state.map);
     
     marker.on('drag', (e) => {
@@ -361,6 +407,7 @@ function calculateCumulativeDistances(polyline) {
     return cumulative;
 }
 
+// Desenhar polyline ATRÁS dos labels
 function drawPolyline(route) {
     if (route.leafletPolyline) {
         state.map.removeLayer(route.leafletPolyline);
@@ -368,13 +415,18 @@ function drawPolyline(route) {
     
     const coordinates = route.polyline.map(p => [p.lat, p.lon]);
     
+    // Criar polyline com zIndex baixo para ficar atrás dos labels
     route.leafletPolyline = L.polyline(coordinates, {
         color: '#1976D2',
         weight: 5,
         opacity: 0.9,
         lineCap: 'round',
-        lineJoin: 'round'
+        lineJoin: 'round',
+        zIndexOffset: 2  // Fica atrás dos labels (zIndex 10+)
     }).addTo(state.map);
+    
+    // Trazer para trás (atrás dos tiles de label)
+    route.leafletPolyline.bringToBack();
     
     if (coordinates.length > 0) {
         state.map.fitBounds(route.leafletPolyline.getBounds(), { padding: [50, 50], maxZoom: 13 });
@@ -444,7 +496,8 @@ function updateSimulatorMarker(route) {
         color: '#ff5722',
         fillColor: '#ff9800',
         fillOpacity: 1,
-        weight: 3
+        weight: 3,
+        zIndexOffset: 100  // Marcador do simulador por cima de tudo
     }).addTo(state.map);
     
     state.markers[markerId] = marker;
@@ -554,7 +607,7 @@ function renderRoutesList() {
     if (!container) return;
     
     if (state.routes.length === 0) {
-        container.innerHTML = '<p style="text-align:center;color:#888;padding:15px;font-size:11px;">Nenhuma rota</p>';
+        container.innerHTML = '<p style="text-align:center;color:#888;padding:15px;font-size:10px;">Nenhuma rota</p>';
         return;
     }
     
@@ -565,7 +618,7 @@ function renderRoutesList() {
         return `
             <div class="route-card ${route.isPlaying ? 'active' : ''}">
                 <div class="route-header">
-                    <div>
+                    <div style="flex:1;min-width:0;">
                         <div class="route-title">🛣️ Rota #${route.id}</div>
                         <div class="route-info">${fromName} → ${toName}</div>
                     </div>
@@ -630,7 +683,7 @@ function showInfo(message) {
     if (infoCard) {
         infoCard.textContent = message;
         setTimeout(() => { 
-            infoCard.textContent = '👆 Ou clique no mapa para criar rota manual'; 
+            infoCard.textContent = '👆 Ou clique no mapa para rota manual'; 
         }, 3000);
     }
 }
