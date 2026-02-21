@@ -1,0 +1,47 @@
+# 🗺️ Simulador de Viagem
+
+Simulador de viagens com rotas reais, velocidade ajustável (40-700 km/h) e acompanhamento em tempo real.
+
+## 🔗 Acesse Online
+
+**https://jbatist7.github.io/simulador-viagem/**
+
+## 📱 Como Usar
+
+1. Abra o link no celular ou computador
+2. Toque/clique no mapa para definir origem e destino
+3. Use os controles abaixo para:
+   - ▶️ Iniciar/Pausar a simulação
+   - 🎚️ Ajustar velocidade (40-700 km/h)
+   - 🔄 Arrastar o slider para avançar/voltar na rota
+   - 🗑️ Excluir a rota quando quiser
+
+## 📲 Instalar no Celular (PWA)
+
+**Android (Chrome):**
+1. Abra o link no Chrome
+2. Toque no menu (⋮)
+3. Selecione "Adicionar à tela inicial"
+
+**iPhone (Safari):**
+1. Abra o link no Safari
+2. Toque no botão Compartilhar
+3. Selecione "Adicionar à Tela de Início"
+
+## ⚠️ Observações
+
+- Rotas usam estradas reais (pode levar alguns segundos para calcular)
+- Funciona melhor com internet estável
+- Cada pessoa usa independentemente (não há sincronização)
+- Mapa: OpenStreetMap | Rotas: OSRM (gratuito)
+
+## 🛠️ Tecnologias
+
+- MapLibre GL JS (mapa)
+- OpenStreetMap (tiles)
+- OSRM (rotas)
+- PWA (instalável)
+
+## 📄 Licença
+
+Uso livre e gratuito. Dados © OpenStreetMap contributors.
