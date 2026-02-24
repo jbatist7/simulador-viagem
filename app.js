@@ -281,6 +281,7 @@ function addMarker(routeId, index, point) {
         title: 'Clique para opções'
     }).addTo(state.map);
     
+    // Clique → popup de exclusão
     marker.on('click', (e) => {
         L.popup({ closeOnClick: true, autoClose: true })
             .setLatLng(e.latlng)
@@ -289,10 +290,16 @@ function addMarker(routeId, index, point) {
         L.DomEvent.stopPropagation(e);
     });
     
+    // Long-press para mobile (500ms)
     let pressTimer;
-    marker.on('mousedown touchstart', () => { pressTimer = setTimeout(() => marker.fire('click'), 500); });
-    marker.on('mouseup touchend touchcancel', () => { clearTimeout(pressTimer); });
+    marker.on('mousedown touchstart', () => { 
+        pressTimer = setTimeout(() => marker.fire('click'), 500); 
+    });
+    marker.on('mouseup touchend touchcancel', () => { 
+        clearTimeout(pressTimer); 
+    });
     
+    // Arrastar marcador
     marker.on('dragend', (e) => {
         const route = state.routes.find(r => r.id == routeId);
         if (route) {
@@ -302,15 +309,18 @@ function addMarker(routeId, index, point) {
         }
     });
     
+    // Salvar marcador no estado
     if (!state.markers[routeId]) state.markers[routeId] = [];
     state.markers[routeId].push(marker);
     
+    // Também salvar na rota
     const route = state.routes.find(r => r.id == routeId);
     if (route) {
         if (!route.leafletMarkers) route.leafletMarkers = [];
         route.leafletMarkers.push(marker);
     }
 }
+
 async function calculateRoute(route) {
     if (route.waypoints.length < 2) return;
     
@@ -381,11 +391,16 @@ function updateSimMarker(route) {
     if (state.markers[id]) state.map.removeLayer(state.markers[id]);
     
     state.markers[id] = L.circleMarker([pos.lat, pos.lon], {
-        radius: 8, color: '#ff5722', fillColor: '#ff9800', fillOpacity: 1, weight: 2
+        radius: 8, 
+        color: '#ff5722', 
+        fillColor: '#ff9800', 
+        fillOpacity: 1, 
+        weight: 2
     }).addTo(state.map);
     
     if (route.isPlaying) state.map.panTo([pos.lat, pos.lon], { animate: true });
 }
+
 
 function getPosition(route) {
     if (!route.polyline.length || !route.totalMeters) return null;
