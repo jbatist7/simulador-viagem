@@ -416,7 +416,18 @@ window.seekRoute = (id, val) => {
 
 window.setSpeed = (id, val) => {
     const route = state.routes.find(r => r.id == id);
-    if (route) route.speedKmh = Math.max(40, Math.min(700, parseFloat(val)));
+    if (route) {
+        route.speedKmh = Math.max(40, Math.min(700, parseFloat(val)));
+        
+        // ✅ Atualiza o texto da velocidade IMEDIATAMENTE
+        const card = document.querySelector(`.route-card:nth-child(${state.routes.indexOf(route) + 1})`);
+        if (card) {
+            const speedText = card.querySelector('.speed-control span:first-child');
+            if (speedText) {
+                speedText.textContent = `${route.speedKmh} km/h`;
+            }
+        }
+    }
 };
 
 window.deleteRoute = (id) => {
