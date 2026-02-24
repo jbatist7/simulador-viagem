@@ -467,15 +467,20 @@ function renderRoutesList() {
     }
     
     container.innerHTML = state.routes.map(route => {
-        const from = route.waypoints[0]?.name || 'Origem';
-        const to = route.waypoints[route.waypoints.length-1]?.name || 'Destino';
+       // ✅ Extrai apenas o nome da cidade (primeira parte antes da vírgula)
+const fromName = route.waypoints[0]?.name ? route.waypoints[0].name.split(',')[0].trim() : 'Origem';
+const toName = route.waypoints[route.waypoints.length-1]?.name ? route.waypoints[route.waypoints.length-1].name.split(',')[0].trim() : 'Destino';
         
         return `
             <div class="route-card ${route.isPlaying ? 'active' : ''}">
                 <div class="route-header">
                     <div>
                         <div class="route-title">Rota #${route.id}</div>
-                        <div style="font-size:7px;color:#666">${from.split(',')[0]} → ${to.split(',')[0]}</div>
+                    
+                        <div style="font-size:7px;color:#666">${fromName} → ${toName}</div>
+
+
+                        
                     </div>
                     <button onclick="deleteRoute(${route.id})" style="background:none;border:none;cursor:pointer">🗑️</button>
                 </div>
