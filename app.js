@@ -281,17 +281,24 @@ function addMarker(routeId, index, point) {
         title: 'Clique para opções'
     }).addTo(state.map);
     
-    // ✅ Clique no marcador abre menu de exclusão
     marker.on('click', (e) => {
         L.popup({ closeOnClick: true, autoClose: true })
             .setLatLng(e.latlng)
-…    
-    const route = state.routes.find(r => r.id == routeId);
-    if (route) {
-        if (!route.leafletMarkers) route.leafletMarkers = [];
-        route.leafletMarkers.push(marker);
-    }
-    }
+            .setContent('<div class="marker-popup"><div class="marker-info">Ponto ' + (index + 1) + '</div><button onclick="deleteWaypoint(' + routeId + ', ' + index + ')">🗑️ Excluir</button></div>')
+            .openOn(state.map);
+        L.DomEvent.stopPropagation(e);
+    });
+    
+    let pressTimer;
+    marker.on('mousedown touchstart', () => { pressTimer = setTimeout(() => marker.fire('click'), 500); });
+    marker.on('mouseup touchend touchcancel', () => { clearTimeout(pressTimer); });
+    
+    marker.on('dragend', (e) => {
+        const route = state.routes.find(r => r.id == routeId);
+        if (route) {
+            route.waypoints[index].lat = e.target.getLatLng().lat;
+            route.waypoints[index].lon = e.target.getLatLng().lng;
+            if (route.waypoints.length >= 2) calculateRoute(route);
         }
     });
     
@@ -304,7 +311,6 @@ function addMarker(routeId, index, point) {
         route.leafletMarkers.push(marker);
     }
 }
-
 async function calculateRoute(route) {
     if (route.waypoints.length < 2) return;
     
