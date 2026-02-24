@@ -374,3 +374,39 @@ body {
         left: 5px;
     }
 }
+
+/* Popup de opções do marcador */
+.marker-popup {
+    background: white;
+    border-radius: 6px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+    padding: 6px 8px;
+    font-size: 11px;
+    min-width: 100px;
+    z-index: 1001;
+}
+
+.marker-popup button {
+    display: block;
+    width: 100%;
+    padding: 4px 8px;
+    background: #d32f2f;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 10px;
+    cursor: pointer;
+    margin-top: 4px;
+}
+
+.marker-popup button:hover {
+    background: #c62828;
+}
+
+.marker-popup .marker-info {
+    color: #666;
+    font-size: 9px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 4px;
+}
