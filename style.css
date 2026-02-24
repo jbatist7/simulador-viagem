@@ -385,6 +385,17 @@ body {
     min-width: 100px;
     z-index: 1001;
 }
+}  ← fecha regra anterior
+
+/* ✅ Popup de opções do marcador */
+.marker-popup {
+    background: white;
+    border-radius: 6px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+    padding: 6px 8px;
+    font-size: 11px;
+    min-width: 100px;
+}
 
 .marker-popup button {
     display: block;
