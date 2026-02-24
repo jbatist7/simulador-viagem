@@ -2,7 +2,7 @@
     "name": "Simulador de Viagem",
     "short_name": "SimViagem",
     "description": "Simule viagens com rotas reais e velocidade ajustável",
-    "start_url": "/",
+    "start_url": "/simulador-viagem/",
     "display": "standalone",
     "background_color": "#ffffff",
     "theme_color": "#1976D2",
