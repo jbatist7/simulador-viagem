@@ -276,14 +276,22 @@ function onMapClick(e) {
 }
 
 function addMarker(routeId, index, point) {
-    const marker = L.marker([point.lat, point.lon], { draggable: true }).addTo(state.map);
+    const marker = L.marker([point.lat, point.lon], { 
+        draggable: true,
+        title: 'Clique para opções'
+    }).addTo(state.map);
     
-    marker.on('dragend', (e) => {
-        const route = state.routes.find(r => r.id == routeId);
-        if (route) {
-            route.waypoints[index].lat = e.target.getLatLng().lat;
-            route.waypoints[index].lon = e.target.getLatLng().lng;
-            if (route.waypoints.length >= 2) calculateRoute(route);
+    // ✅ Clique no marcador abre menu de exclusão
+    marker.on('click', (e) => {
+        L.popup({ closeOnClick: true, autoClose: true })
+            .setLatLng(e.latlng)
+…    
+    const route = state.routes.find(r => r.id == routeId);
+    if (route) {
+        if (!route.leafletMarkers) route.leafletMarkers = [];
+        route.leafletMarkers.push(marker);
+    }
+    }
         }
     });
     
@@ -527,3 +535,36 @@ function haversine(p1, p2) {
     const a = Math.sin(dLat/2)**2 + Math.cos(p1.lat*Math.PI/180) * Math.cos(p2.lat*Math.PI/180) * Math.sin(dLon/2)**2;
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
+
+// ✅ Função para excluir waypoint
+window.deleteWaypoint = function(routeId, waypointIndex) {
+    console.log('🗑️ Excluindo waypoint:', routeId, waypointIndex);
+    
+    const route = state.routes.find(r => r.id == routeId);
+    if (!route) return;
+    
+    // Remover marcador do mapa
+    if (state.markers[routeId] && state.markers[routeId][waypointIndex]) {
+        state.map.removeLayer(state.markers[routeId][waypointIndex]);
+        state.markers[routeId].splice(waypointIndex, 1);
+    }
+    
+    // Remover da lista de waypoints
+    route.waypoints.splice(waypointIndex, 1);
+    
+    // Se sobrar < 2 pontos, remover polyline
+    if (route.waypoints.length < 2) {
+        if (route.leafletPolyline) {
+            state.map.removeLayer(route.leafletPolyline);
+            route.leafletPolyline = null;
+        }
+        route.polyline = [];
+        route.totalMeters = 0;
+    } else {
+        // Recalcular rota
+        calculateRoute(route);
+    }
+    
+    renderRoutesList();
+    state.map.closePopup();
+};
