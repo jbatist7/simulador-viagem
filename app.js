@@ -213,8 +213,8 @@ async function calculateRouteFromTo() {
     const route = { 
         id: state.nextRouteId++, 
         waypoints: [
-            { lat: state.waypointFrom.lat, lon: state.waypointFrom.lon },
-            { lat: state.waypointTo.lat, lon: state.waypointTo.lon }
+        { lat: state.waypointFrom.lat, lon: state.waypointFrom.lon, name: state.waypointFrom.name },
+        { lat: state.waypointTo.lat, lon: state.waypointTo.lon, name: state.waypointTo.name }
         ], 
         polyline: [], 
         totalMeters: 0, 
