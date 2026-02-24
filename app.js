@@ -465,8 +465,7 @@ function renderRoutesList() {
         container.innerHTML = '<p style="text-align:center;color:#888;padding:10px;font-size:9px;">Nenhuma rota</p>';
         return;
     }
-    
-    container.innerHTML = state.routes.map(route => {
+        container.innerHTML = state.routes.map(route => {
        // ✅ Extrai apenas o nome da cidade (primeira parte antes da vírgula)
 const fromName = route.waypoints[0]?.name ? route.waypoints[0].name.split(',')[0].trim() : 'Origem';
 const toName = route.waypoints[route.waypoints.length-1]?.name ? route.waypoints[route.waypoints.length-1].name.split(',')[0].trim() : 'Destino';
@@ -476,12 +475,8 @@ const toName = route.waypoints[route.waypoints.length-1]?.name ? route.waypoints
                 <div class="route-header">
                     <div>
                         <div class="route-title">Rota #${route.id}</div>
-                    
-                        <div style="font-size:7px;color:#666">${fromName} → ${toName}</div>
-
-
-                        
-                    </div>
+                                            <div style="font-size:7px;color:#666">${fromName} → ${toName}</div>
+                   </div>
                     <button onclick="deleteRoute(${route.id})" style="background:none;border:none;cursor:pointer">🗑️</button>
                 </div>
                 <div class="route-controls">
@@ -506,7 +501,6 @@ const toName = route.waypoints[route.waypoints.length-1]?.name ? route.waypoints
         `;
     }).join('');
 }
-
 function updateRouteUI(route) {
     const cards = document.querySelectorAll('.route-card');
     const idx = state.routes.findIndex(r => r.id == route.id);
