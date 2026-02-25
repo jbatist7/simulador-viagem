@@ -1,11 +1,12 @@
 {
     "name": "Simulador de Viagem",
-    "short_name": "SimViagem",
+    "short_name": "Simula-Viagem",
     "description": "Simule viagens com rotas reais e velocidade ajustável",
     "start_url": "/simulador-viagem/",
     "display": "standalone",
     "background_color": "#ffffff",
     "theme_color": "#1976D2",
     "orientation": "any",
-    "icons": [{ "src": "https://via.placeholder.com/192/1976D2/FFFFFF?text=🗺️", "sizes": "192x192", "type": "image/png" }]
+   "icons": []
 }
+
